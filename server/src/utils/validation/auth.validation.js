@@ -1,3 +1,4 @@
+import Joi from "joi";
 import joi from "joi";
 const registerSchema = joi.object({
     
@@ -11,4 +12,14 @@ const registerSchema = joi.object({
       "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character"
   }),
 })
-export {registerSchema}
+
+const loginSchema = joi.object({
+  email: joi.string()
+    .trim()
+    .lowercase()
+    .email()
+    .required(),
+  password: joi.string()
+  .required()
+})
+export {registerSchema,loginSchema}

@@ -1,9 +1,9 @@
 import express from "express";
 import { login, register } from "../controllers/auth.controller.js";
 import { validate } from "../middleware/validate.js";
-import { registerSchema } from "../utils/validation/auth.validation.js";
+import { registerSchema,loginSchema } from "../utils/validation/auth.validation.js";
 const router = express.Router();
 router.post("/register", validate(registerSchema), register);
 
-router.post("/login", login);
+router.post("/login",validate(loginSchema) ,login);
 export default router;
