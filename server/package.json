@@ -6,7 +6,10 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+        "create:admin": "node src/scripts/createSuperAdmin.js"
+
+
   },
   "keywords": [],
   "author": "",

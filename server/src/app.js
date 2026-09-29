@@ -2,18 +2,23 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import authRoutes from "./routes/auth.routes.js";
+import userRoutes from "./routes/user.routes.js";
 const app = express();
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
 // Routes for authentication and Authorization
 app.use("/api/auth",authRoutes);
+// test route for authorization and authentication
 
 
+// user routing API
+app.use("/api/users",userRoutes)
 
 app.get("/api", (req, res) => {
   res.send("Gethéva Hotel server is running");
 });
+
 
 //404 error handler
 app.use((req, res) => {
@@ -21,7 +26,7 @@ app.use((req, res) => {
     success: false,
     message: "Route not found",
   });
-});
+}); 
 
 
 // Centralized error handler

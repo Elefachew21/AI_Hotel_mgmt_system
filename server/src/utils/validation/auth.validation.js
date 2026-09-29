@@ -20,6 +20,43 @@ const loginSchema = joi.object({
     .email()
     .required(),
   password: joi.string()
+    .required()
+});
+const createStaffSchema = joi.object({
+  firstName: joi.string()
+    .trim()
+    .min(2)
+    .max(50)
+    .required(),
+  lastName: joi.string()
+    .trim()
+    .min(2)
+    .max(50)
+    .required(),
+  email: joi.string()
+    .lowercase()
+    .trim()
+    .required()
+    .email(),
+  phone: joi.string()
+    .trim()
+    .min(7)
+    .max(20)
+    .optional(),
+  password: joi.string()
+    .min(8)
+    .max(128)
+    .required(),
+  role: joi.string()
+    .valid(
+     "MANAGER",
+            "RECEPTIONIST",
+            "CASHIER",
+            "KITCHEN_STAFF",
+            "INVENTORY_OFFICER",
+            "HOUSEKEEPER",
+            "MAINTENANCE_TECH"
+  )
   .required()
 })
-export {registerSchema,loginSchema}
+export {registerSchema,loginSchema,createStaffSchema}

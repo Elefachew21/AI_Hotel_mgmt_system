@@ -1,8 +1,10 @@
 import bcrypt from "bcryptjs";
+import dotenv from "dotenv";
 import User from "../models/User.js";
+dotenv.config();
 
  const hashPassword = async (password) => {
-    return await bcrypt.hash(password, 12);
+    return await bcrypt.hash(password,Number(process.env.BCRYPT_SALT_ROUNDS|| 12));
 };
 
  const comparePassword = async (password, passwordHash) => {
