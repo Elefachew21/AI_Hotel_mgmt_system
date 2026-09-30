@@ -3,6 +3,8 @@ import cors from "cors";
 import helmet from "helmet";
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
+import customerRoutes from "./routes/customer.routes.js";
+import roomRoutes from "./routes/room.routes.js";
 const app = express();
 app.use(helmet());
 app.use(cors());
@@ -18,7 +20,11 @@ app.use("/api/users",userRoutes)
 app.get("/api", (req, res) => {
   res.send("Gethéva Hotel server is running");
 });
-
+// Customer API Routing
+app.use("/api/customers",customerRoutes)
+ 
+// Room API Routing
+app.use("/api/rooms", roomRoutes);
 
 //404 error handler
 app.use((req, res) => {
