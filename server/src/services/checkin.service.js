@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import Reservation from "../models/Reservation.js";
 import Room from "../models/Room.js";
-
+import { createFolioForReservation, addRoomCharge } from "./folio.service.js";
 export const checkInReservation = async (reservationId, userId) => {
     const session = await mongoose.startSession();
 
@@ -106,6 +106,17 @@ export const checkInReservation = async (reservationId, userId) => {
             await reservation.save({
                 session
             });
+            await createFolioForReservation(
+  reservation._id,
+  userId,
+  session
+);
+
+await addRoomCharge(
+  reservation._id,
+  userId,
+  session
+);
 
             checkedInReservationId = reservation._id;
         });

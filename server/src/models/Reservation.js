@@ -33,7 +33,7 @@ const reservationSchema = new mongoose.Schema(
         checkedInAt: {
     type: Date,
     default: null
-},
+            },
 
 checkedInBy: {
     type: mongoose.Schema.Types.ObjectId,

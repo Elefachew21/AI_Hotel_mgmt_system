@@ -6,6 +6,8 @@ import userRoutes from "./routes/user.routes.js";
 import customerRoutes from "./routes/customer.routes.js";
 import roomRoutes from "./routes/room.routes.js";
 import reservationRoutes from "./routes/reservation.routes.js";
+import paymentRoutes from "./routes/payment.routes.js";
+import folioRoutes from "./routes/folio.routes.js";
 
 const app = express();
 app.use(helmet());
@@ -29,6 +31,9 @@ app.use("/api/customers",customerRoutes)
 app.use("/api/rooms", roomRoutes);
 // Reservation API Routing
 app.use("/api/reservations", reservationRoutes);
+//payment APIRouting 
+app.use("/api/payments", paymentRoutes);
+app.use("/api/folios", folioRoutes);
 
 //404 error handler
 app.use((req, res) => {
