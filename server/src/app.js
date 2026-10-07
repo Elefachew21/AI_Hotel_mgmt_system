@@ -10,6 +10,7 @@ import paymentRoutes from "./routes/payment.routes.js";
 import folioRoutes from "./routes/folio.routes.js";
 import publicRestaurantRoutes from "./routes/publicRestaurant.routes.js";
 import   restaurantManagementRoutes from "./routes/restaurantManagement.routes.js";
+import kitchenOrderTicketRoutes from "./routes/kitchenOrderTicket.routes.js";
 
 const app = express();
 app.use(helmet());
@@ -41,6 +42,9 @@ app.use("/api/folios", folioRoutes);
 app.use("/api/public/restaurant", publicRestaurantRoutes);
 // Restaurant management API Routing
 app.use("/api/restaurant", restaurantManagementRoutes);
+
+// Kot related API Routing
+app.use("/api/kitchen/kots", kitchenOrderTicketRoutes);
 //404 error handler
 app.use((req, res) => {
   res.status(404).json({

@@ -29,3 +29,8 @@ export const generateOrderNumber = async (session = null) => {
 
   return `ORD_${sequence}`;
 };
+export const generateKotNumber = async (session = null) => {
+  const sequence = await getNextSequence("KITCHEN_ORDER_TICKET", session);
+
+  return `KOT_${sequence}`;
+};

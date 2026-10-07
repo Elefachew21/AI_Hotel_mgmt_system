@@ -4,7 +4,7 @@ import FoodOrderItem from "../models/FoodOrderItem.js";
 import OrderSession from "../models/OrderSession.js";
 import MenuItem from "../models/MenuItem.js";
 import { generateOrderNumber } from "./sequence.service.js";
-
+import {createKitchenOrderTicket} from "./kitchenOrderTicket.service.js";
 
 export const createFoodOrder = async ({
   sessionToken,
@@ -29,7 +29,7 @@ export const createFoodOrder = async ({
     throw error;
   }
 
-  const sessionDb = await mongoose.startSession();
+  const dbSession = await mongoose.startSession();
 
   try {
     let createdOrder;
@@ -120,7 +120,10 @@ export const createFoodOrder = async ({
         orderItemsToCreate,
         { session: dbSession }
       );
-
+     await createKitchenOrderTicket({
+    foodOrderId: order._id,
+     dbSession
+});
       orderSession.status = "COMPLETED";
       await orderSession.save({ session: dbSession });
 
