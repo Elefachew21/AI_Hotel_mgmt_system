@@ -1,6 +1,6 @@
 import { verifyAccessToken } from "../services/token.service.js";
 
-export const authenticate = (req, res, next) => {
+ const authenticate = (req, res, next) => {
     try {
         const authorization = req.headers.authorization;
 
@@ -37,3 +37,4 @@ export const authenticate = (req, res, next) => {
 }
     
 };
+export  {authenticate};

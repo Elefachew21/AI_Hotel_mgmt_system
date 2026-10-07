@@ -3,12 +3,8 @@ import FoodOrder from "../models/FoodOrder.js";
 import FoodOrderItem from "../models/FoodOrderItem.js";
 import OrderSession from "../models/OrderSession.js";
 import MenuItem from "../models/MenuItem.js";
+import { generateOrderNumber } from "./sequence.service.js";
 
-const generateOrderNumber = async () => {
-  const count = await FoodOrder.countDocuments();
-
-  return `ORD_${String(count + 1).padStart(4, "0")}`;
-};
 
 export const createFoodOrder = async ({
   sessionToken,
@@ -21,13 +17,13 @@ export const createFoodOrder = async ({
     throw error;
   }
 
-  const session = await OrderSession.findOne({
+  const orderSession = await OrderSession.findOne({
     sessionToken,
     status: "ACTIVE",
     expiresAt: { $gt: new Date() }
   });
 
-  if (!session) {
+  if (!orderSession ) {
     const error = new Error("Order session is invalid or expired");
     error.statusCode = 401;
     throw error;
@@ -38,14 +34,14 @@ export const createFoodOrder = async ({
   try {
     let createdOrder;
 
-    await sessionDb.withTransaction(async () => {
+    await dbSession.withTransaction(async () => {
       const menuItemIds = items.map((item) => item.menuItemId);
 
       const menuItems = await MenuItem.find({
         _id: { $in: menuItemIds },
         isActive: true,
         isAvailable: true
-      }).session(sessionDb);
+      }).session(dbSession);
 
       if (menuItems.length !== new Set(menuItemIds).size) {
         const error = new Error(
@@ -62,7 +58,7 @@ export const createFoodOrder = async ({
         ])
       );
 
-      const orderNumber = await generateOrderNumber();
+      const orderNumber = await generateOrderNumber(dbSession);
 
       let totalAmount = 0;
 
@@ -105,14 +101,14 @@ export const createFoodOrder = async ({
         [
           {
             orderNumber,
-            table: session.table,
-            session: session._id,
+            table: orderSession.table,
+            session: orderSession._id,
             status: "PENDING",
             totalAmount,
             customerNotes: customerNotes?.trim() || null
           }
         ],
-        { session: sessionDb }
+        { session: dbSession }
       );
 
       const orderItemsToCreate = orderItems.map((item) => ({
@@ -122,11 +118,11 @@ export const createFoodOrder = async ({
 
       await FoodOrderItem.insertMany(
         orderItemsToCreate,
-        { session: sessionDb }
+        { session: dbSession }
       );
 
-      session.status = "COMPLETED";
-      await session.save({ session: sessionDb });
+      orderSession.status = "COMPLETED";
+      await orderSession.save({ session: dbSession });
 
       createdOrder = order;
     });
@@ -135,6 +131,6 @@ export const createFoodOrder = async ({
       .populate("table", "tableNumber")
       .lean();
   } finally {
-    await sessionDb.endSession();
+    await dbSession.endSession();
   }
 };

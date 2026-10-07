@@ -8,6 +8,8 @@ import roomRoutes from "./routes/room.routes.js";
 import reservationRoutes from "./routes/reservation.routes.js";
 import paymentRoutes from "./routes/payment.routes.js";
 import folioRoutes from "./routes/folio.routes.js";
+import publicRestaurantRoutes from "./routes/publicRestaurant.routes.js";
+import   restaurantManagementRoutes from "./routes/restaurantManagement.routes.js";
 
 const app = express();
 app.use(helmet());
@@ -35,6 +37,10 @@ app.use("/api/reservations", reservationRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/folios", folioRoutes);
 
+// Restaurant public API routing
+app.use("/api/public/restaurant", publicRestaurantRoutes);
+// Restaurant management API Routing
+app.use("/api/restaurant", restaurantManagementRoutes);
 //404 error handler
 app.use((req, res) => {
   res.status(404).json({
