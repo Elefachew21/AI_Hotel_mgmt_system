@@ -4,7 +4,8 @@ import FoodOrderItem from "../models/FoodOrderItem.js";
 import OrderSession from "../models/OrderSession.js";
 import MenuItem from "../models/MenuItem.js";
 import { generateOrderNumber } from "./sequence.service.js";
-import {createKitchenOrderTicket} from "./kitchenOrderTicket.service.js";
+import {createKitchenOrderTicket, getKitchenOrderTicketById} from "./kitchenOrderTicket.service.js";
+import { emitKotCreated } from "../realtime/kitchen.events.js";
 
 export const createFoodOrder = async ({
   sessionToken,
@@ -33,7 +34,7 @@ export const createFoodOrder = async ({
 
   try {
     let createdOrder;
-
+let createdKot;
     await dbSession.withTransaction(async () => {
       const menuItemIds = items.map((item) => item.menuItemId);
 
@@ -120,7 +121,7 @@ export const createFoodOrder = async ({
         orderItemsToCreate,
         { session: dbSession }
       );
-     await createKitchenOrderTicket({
+   createdKot=   await createKitchenOrderTicket({
     foodOrderId: order._id,
      dbSession
 });
@@ -129,6 +130,10 @@ export const createFoodOrder = async ({
 
       createdOrder = order;
     });
+    const kitchenKot = await getKitchenOrderTicketById(createdKot._id)
+    
+ emitKotCreated(kitchenKot)
+
 
     return FoodOrder.findById(createdOrder._id)
       .populate("table", "tableNumber")

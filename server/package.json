@@ -7,9 +7,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon server.js",
     "start": "node server.js",
-        "create:admin": "node src/scripts/createSuperAdmin.js"
-
-
+    "create:admin": "node src/scripts/createSuperAdmin.js"
   },
   "keywords": [],
   "author": "",
@@ -23,9 +21,10 @@
     "helmet": "^8.3.0",
     "joi": "^18.2.9",
     "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.10.2"
+    "mongoose": "^9.10.2",
+    "socket.io": "^4.8.4"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "nodemon": "^1.14.10"
   }
 }

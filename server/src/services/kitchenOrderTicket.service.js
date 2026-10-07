@@ -2,6 +2,7 @@ import KitchenOrderTicket from "../models/KitchenOrderTicket.js";
 import FoodOrder from "../models/FoodOrder.js";
 import { generateKotNumber } from "./sequence.service.js";
 import FoodOrderItem from "../models/FoodOrderItem.js"; 
+import { emitKotCancelled,emitKotReady,emitKotStarted } from "../realtime/kitchen.events.js";
 const invalidTransition = (from, to) => {
   const error = new Error(
     `Invalid KOT status transition from ${from} to ${to}`
@@ -149,7 +150,20 @@ const transitionKotStatus = async ({
   }
 
   await kot.save();
+const updatedKot =
+  await getKitchenOrderTicketById(kot._id);
 
+if (nextStatus === "COOKING") {
+  emitKotStarted(updatedKot);
+}
+
+if (nextStatus === "READY") {
+  emitKotReady(updatedKot);
+}
+
+if (nextStatus === "CANCELLED") {
+  emitKotCancelled(updatedKot);
+}
   return kot;
 };
 export const startCooking = async (kotId, userId) => {
@@ -175,9 +189,8 @@ export const cancelKot = async (kotId, userId) => {
     nextStatus: "CANCELLED",
     userId
   });
-    if (nextStatus === "CANCELLED") {
-  kot.cancelledAt = new Date();
-  kot.cancelledBy = userId;
-}
+    
+   
+
 };
 
