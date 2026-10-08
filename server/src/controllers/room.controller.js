@@ -37,7 +37,7 @@ const getOne = async (req, res, next) => {
                 message:"Room Not Found"
             })
         }
-        res.status(200).json({
+      return  res.status(200).json({
             success: true,
             data: {
                 room
