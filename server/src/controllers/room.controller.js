@@ -1,4 +1,4 @@
-import { createRoom,getRoomsByID, getRooms, updateRoom, updateRoomStatus } from "../services/room.service.js";
+import { createRoom,getRoomsByID, getRooms, updateRoom, updateRoomStatus,assignHousekeeper } from "../services/room.service.js";
 const create = async (req, res, next) => {
     try {
         const room = await createRoom(req.body);
@@ -88,10 +88,28 @@ const updateStatus = async (req, res, next) => {
         next(error);
     }
 }
+const assignHousekeeperToRoom = async (req, res, next) => {
+    try {
+        const room = await assignHousekeeper(
+            req.params.id,
+            req.body.housekeeperId
+        );
+
+        res.status(200).json({
+            success: true,
+            message: "Housekeeper assignment updated successfully",
+            data: {
+                room
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+};
 export {
     create,
     update,
     updateStatus,
     list,
-    getOne
+    getOne,assignHousekeeperToRoom
 }

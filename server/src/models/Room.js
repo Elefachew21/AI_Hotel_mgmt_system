@@ -46,6 +46,12 @@ const roomSchema = new mongoose.Schema(
             ],
             default: "AVAILABLE"
         },
+        assignedHousekeeper: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    default: null,
+    index: true
+},
 
         description: {
             type: String,

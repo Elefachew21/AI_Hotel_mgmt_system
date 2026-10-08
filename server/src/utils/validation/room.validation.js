@@ -55,3 +55,11 @@ export const updateRoomStatusSchema = Joi.object({
         )
         .required()
 });
+export const assignHousekeeperSchema = Joi.object({
+
+    housekeeperId: Joi.string()
+    .hex()
+        .length(24)
+        .allow(null)
+    .required()
+})
