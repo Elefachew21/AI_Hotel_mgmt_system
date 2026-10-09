@@ -1,84 +1,102 @@
 import mongoose from "mongoose";
 import Reservation from "../models/Reservation.js";
 import Room from "../models/Room.js";
-
+import HousekeepingTask from "../models/HousekeepingTask.js";
+import { emitHousekeepingTaskCreated } from "../realtime/housekeeping.events.js";
+import { createHousekeepingTask } from "./housekeeping.service.js";
 export const checkOutReservation = async (reservationId, userId) => {
   const session = await mongoose.startSession();
 
   try {
     let checkedOutReservationId;
-
-    await session.withTransaction(async () => {
-      const reservation = await Reservation.findById(reservationId)
+    let createdHousekeepingTaskId;
+   await session.withTransaction(async () => {
+    const reservation = await Reservation.findById(reservationId)
         .session(session);
 
-      if (!reservation) {
+    if (!reservation) {
         const error = new Error("Reservation not found");
         error.statusCode = 404;
         throw error;
-      }
+    }
 
-      if (reservation.status !== "CHECKED_IN") {
+    if (reservation.status !== "CHECKED_IN") {
         const error = new Error(
-          `Reservation cannot be checked out from ${reservation.status} status`
+            `Reservation cannot be checked out from ${reservation.status} status`
         );
 
         error.statusCode = 409;
         throw error;
-      }
+    }
 
-      /*
-       * Checkout makes the room dirty.
-       *
-       * It must currently be OCCUPIED.
-       */
-      const updatedRoom = await Room.findOneAndUpdate(
+    const updatedRoom = await Room.findOneAndUpdate(
         {
-          _id: reservation.room,
-          isActive: true,
-          status: "OCCUPIED"
+            _id: reservation.room,
+            isActive: true,
+            status: "OCCUPIED"
         },
         {
-          $set: {
-            status: "DIRTY"
-          }
+            $set: {
+                status: "DIRTY"
+            }
         },
         {
-          new: true,
-          session
+            new: true,
+            session
         }
-      );
+    );
 
-      if (!updatedRoom) {
+    if (!updatedRoom) {
         const roomExists = await Room.exists({
-          _id: reservation.room
+            _id: reservation.room
         }).session(session);
 
         if (!roomExists) {
-          const error = new Error(
-            "The room assigned to this reservation was not found"
-          );
+            const error = new Error(
+                "The room assigned to this reservation was not found"
+            );
 
-          error.statusCode = 404;
-          throw error;
+            error.statusCode = 404;
+            throw error;
         }
 
         const error = new Error(
-          "The assigned room is not currently occupied"
+            "The assigned room is not currently occupied"
         );
 
         error.statusCode = 409;
         throw error;
-      }
+    }
 
-      reservation.status = "CHECKED_OUT";
-      reservation.checkedOutAt = new Date();
-      reservation.checkedOutBy = userId;
+    // Generate the human-readable housekeeping task number
+   
 
-      await reservation.save({ session });
+    // Create the cleaning task using the room's
+    // current housekeeper assignment.
+    const housekeepingTask = await createHousekeepingTask(
+        
+            {
+                                roomId: updatedRoom._id,
+                assignedStaff: updatedRoom.assignedHousekeeper,
+            reason: "CHECKOUT",
+                session
+            }
+    
+    );
 
-      checkedOutReservationId = reservation._id;
-    });
+    reservation.status = "CHECKED_OUT";
+    reservation.checkedOutAt = new Date();
+    reservation.checkedOutBy = userId;
+
+    await reservation.save({ session });
+
+    checkedOutReservationId = reservation._id;
+    createdHousekeepingTaskId = housekeepingTask._id;
+   });
+    const housekeepingTasks = await HousekeepingTask.findById(createdHousekeepingTaskId)
+      .populate("room")
+      .populate("assignedStaff", "firstName lastName email role ");
+    emitHousekeepingTaskCreated(housekeepingTasks);
 
     return await Reservation.findById(checkedOutReservationId)
       .populate("customer")

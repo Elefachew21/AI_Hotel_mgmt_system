@@ -11,7 +11,9 @@ export const initializeSocket = (httpServer) => {
 
   io.on("connection", (socket) => {
     console.log(`Socket connected: ${socket.id}`);
-
+    //===================
+    // KITCHEN
+    //===================
     socket.on("kitchen:join", () => {
       socket.join("kitchen");
 
@@ -19,6 +21,7 @@ export const initializeSocket = (httpServer) => {
         `Socket ${socket.id} joined kitchen room`
       );
     });
+   
 
     socket.on("kitchen:leave", () => {
       socket.leave("kitchen");
@@ -27,7 +30,31 @@ export const initializeSocket = (httpServer) => {
         `Socket ${socket.id} left kitchen room`
       );
     });
+   
+//===================
+// HOUSEKEEPING
+//===================
 
+socket.on("housekeeping:join", (housekeeperId) => {
+  const roomName = `housekeeper:${housekeeperId}`;
+
+  socket.join(roomName);
+
+  console.log(`Socket ${socket.id} joined ${roomName}`);
+});
+
+socket.on("housekeeping:leave", (housekeeperId) => {
+  const roomName = `housekeeper:${housekeeperId}`;
+
+  socket.leave(roomName);
+
+  console.log(`Socket ${socket.id} left ${roomName}`);
+});
+
+
+    //===================
+    // Disconnect
+    //===================
     socket.on("disconnect", () => {
       console.log(`Socket disconnected: ${socket.id}`);
     });

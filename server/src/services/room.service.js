@@ -1,4 +1,5 @@
 import Room from "../models/Room.js";
+import HousekeepingTask from "../models/HousekeepingTask.js";
 import User from "../models/User.js";const createRoom = async (data) => {
     const existingRoom = await Room.findOne({
         roomNumber: data.roomNumber
@@ -42,43 +43,69 @@ const updateRoomStatus = async (roomId, status) => {
 }
 
 
+
 const assignHousekeeper = async (roomId, housekeeperId) => {
-    const room = await Room.findById(roomId);
+    const session = await Room.startSession();
 
-    if (!room) {
-        const error = new Error("Room not found");
-        error.statusCode = 404;
-        throw error;
+    let updatedRoom;
+
+    try {
+        await session.withTransaction(async () => {
+            const room = await Room.findById(roomId).session(session);
+
+            if (!room) {
+                const error = new Error("Room not found");
+                error.statusCode = 404;
+                throw error;
+            }
+
+            // Allow management to remove the room assignment.
+            if (housekeeperId === null) {
+                room.assignedHousekeeper = null;
+                await room.save({ session });
+
+                updatedRoom = room;
+                return;
+            }
+
+            const housekeeper = await User.findOne({
+                _id: housekeeperId,
+                role: "HOUSEKEEPER",
+                status: "ACTIVE"
+            }).session(session);
+
+            if (!housekeeper) {
+                const error = new Error("Active housekeeper not found");
+                error.statusCode = 404;
+                throw error;
+            }
+
+            // Update the room's default housekeeper.
+            room.assignedHousekeeper = housekeeper._id;
+            await room.save({ session });
+
+            // Also assign the latest eligible existing task,
+            // if one is waiting for a housekeeper.
+            const pendingTask = await HousekeepingTask.findOne({
+                room: room._id,
+                status: "PENDING",
+                assignedStaff: null
+            })
+                .sort({ createdAt: -1 })
+                .session(session);
+
+            if (pendingTask) {
+                pendingTask.assignedStaff = housekeeper._id;
+                await pendingTask.save({ session });
+            }
+
+            updatedRoom = room;
+        });
+
+        return updatedRoom;
+    } finally {
+        await session.endSession();
     }
-
-    // Allow management to remove the assignment
-    if (housekeeperId === null) {
-        room.assignedHousekeeper = null;
-        await room.save();
-
-        return room;
-    }
-
-    const housekeeper = await User.findOne({
-        _id: housekeeperId,
-        role: "HOUSEKEEPER",
-        status: "ACTIVE"
-    });
-
-    if (!housekeeper) {
-        const error = new Error(
-            "Active housekeeper not found"
-        );
-
-        error.statusCode = 404;
-        throw error;
-    }
-
-    room.assignedHousekeeper = housekeeper._id;
-
-    await room.save();
-
-    return room;
 };
 
 export { createRoom, getRooms, updateRoom, updateRoomStatus, getRoomsByID,assignHousekeeper };

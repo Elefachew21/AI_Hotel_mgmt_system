@@ -11,7 +11,7 @@ import folioRoutes from "./routes/folio.routes.js";
 import publicRestaurantRoutes from "./routes/publicRestaurant.routes.js";
 import   restaurantManagementRoutes from "./routes/restaurantManagement.routes.js";
 import kitchenOrderTicketRoutes from "./routes/kitchenOrderTicket.routes.js";
-
+import housekeepingTaskRoutes from "./routes/housekeeping.routes.js";
 const app = express();
 app.use(helmet());
 app.use(cors());
@@ -45,6 +45,8 @@ app.use("/api/restaurant", restaurantManagementRoutes);
 
 // Kot related API Routing
 app.use("/api/kitchen/kots", kitchenOrderTicketRoutes);
+//housekeeping related API routing
+app.use("/api/housekeeping", housekeepingTaskRoutes);
 //404 error handler
 app.use((req, res) => {
   res.status(404).json({

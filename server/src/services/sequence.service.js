@@ -34,3 +34,10 @@ export const generateKotNumber = async (session = null) => {
 
   return `KOT_${sequence}`;
 };
+export const generateHousekeepingTaskNumber = async (session = null) => {
+   const sequence = await getNextSequence(
+          "HOUSEKEEPING_TASK",
+          session
+  );
+  return `HK_${sequence}`;
+}
