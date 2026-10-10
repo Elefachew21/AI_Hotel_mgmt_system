@@ -201,8 +201,8 @@ export const completeHousekeepingTask = async (taskId, userId) => {
       }
 
       task.status = "COMPLETED";
-      task.startedAt = new Date();
-      task.startedBy = userId;
+      task.completedAt = new Date();
+      task.completedAt = userId;
 
       await task.save({ session });
 

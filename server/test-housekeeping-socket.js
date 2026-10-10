@@ -10,6 +10,7 @@ const socket = io("http://localhost:3132");
 
 const events = [
   "housekeeping:task_created",
+  "housekeeping:task_assigned",
   "housekeeping:task_started",
   "housekeeping:task_completed"
 ];

@@ -93,11 +93,28 @@ export const checkOutReservation = async (reservationId, userId) => {
     checkedOutReservationId = reservation._id;
     createdHousekeepingTaskId = housekeepingTask._id;
    });
-    const housekeepingTasks = await HousekeepingTask.findById(createdHousekeepingTaskId)
-      .populate("room")
-      .populate("assignedStaff", "firstName lastName email role ");
-    emitHousekeepingTaskCreated(housekeepingTasks);
+      
+   
+const housekeepingTasks = await HousekeepingTask.findById(
+  createdHousekeepingTaskId
+)
+  .populate("room", "roomNumber")
+  .populate("assignedStaff", "firstName lastName email role");
 
+console.log("Checkout housekeeping task:", {
+  taskNumber: housekeepingTasks?.taskNumber,
+  status: housekeepingTasks?.status,
+  room: housekeepingTasks?.room?.roomNumber,
+  assignedStaff: housekeepingTasks?.assignedStaff?._id?.toString() ?? null
+});
+
+if (housekeepingTasks?.assignedStaff) {
+  emitHousekeepingTaskCreated(housekeepingTasks);
+} else {
+  console.log(
+    "No housekeeping:task_created event: task has no assigned housekeeper."
+  );
+}
     return await Reservation.findById(checkedOutReservationId)
       .populate("customer")
       .populate("room")

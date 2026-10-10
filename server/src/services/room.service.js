@@ -1,6 +1,8 @@
 import Room from "../models/Room.js";
 import HousekeepingTask from "../models/HousekeepingTask.js";
-import User from "../models/User.js";const createRoom = async (data) => {
+import User from "../models/User.js";
+import { emitHousekeepingTaskAssigned } from "../realtime/housekeeping.events.js";
+const createRoom = async (data) => {
     const existingRoom = await Room.findOne({
         roomNumber: data.roomNumber
     });
@@ -47,9 +49,10 @@ const updateRoomStatus = async (roomId, status) => {
 const assignHousekeeper = async (roomId, housekeeperId) => {
     const session = await Room.startSession();
 
-    let updatedRoom;
 
     try {
+            let assignedTaskId = null;
+            let updatedRoom;
         await session.withTransaction(async () => {
             const room = await Room.findById(roomId).session(session);
 
@@ -97,11 +100,20 @@ const assignHousekeeper = async (roomId, housekeeperId) => {
             if (pendingTask) {
                 pendingTask.assignedStaff = housekeeper._id;
                 await pendingTask.save({ session });
+                assignedTaskId = pendingTask._id;
             }
 
             updatedRoom = room;
-        });
-
+        }); 
+        if (assignedTaskId) {
+            const assignedTask = await HousekeepingTask.findById(
+                assignedTaskId)
+                .populate("room", "roomNumber");
+            if (assignedTask) {
+                emitHousekeepingTaskAssigned(assignedTask);
+            }
+        }
+ 
         return updatedRoom;
     } finally {
         await session.endSession();
