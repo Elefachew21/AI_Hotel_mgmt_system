@@ -1,11 +1,15 @@
 import KitchenOrderTicket from "../models/KitchenOrderTicket.js";
 import FoodOrder from "../models/FoodOrder.js";
 import { generateKotNumber } from "./sequence.service.js";
-import FoodOrderItem from "../models/FoodOrderItem.js"; 
-import { emitKotCancelled,emitKotReady,emitKotStarted } from "../realtime/kitchen.events.js";
+import FoodOrderItem from "../models/FoodOrderItem.js";
+import {
+  emitKotCancelled,
+  emitKotReady,
+  emitKotStarted,
+} from "../realtime/kitchen.events.js";
 const invalidTransition = (from, to) => {
   const error = new Error(
-    `Invalid KOT status transition from ${from} to ${to}`
+    `Invalid KOT status transition from ${from} to ${to}`,
   );
 
   error.statusCode = 409;
@@ -15,10 +19,9 @@ const invalidTransition = (from, to) => {
 
 export const createKitchenOrderTicket = async ({
   foodOrderId,
-  dbSession = null
+  dbSession = null,
 }) => {
-  const foodOrder = await FoodOrder.findById(foodOrderId)
-    .session(dbSession);
+  const foodOrder = await FoodOrder.findById(foodOrderId).session(dbSession);
 
   if (!foodOrder) {
     const error = new Error("Food order not found");
@@ -27,21 +30,19 @@ export const createKitchenOrderTicket = async ({
   }
 
   if (foodOrder.status === "CANCELLED") {
-    const error = new Error(
-      "Cannot create KOT for a cancelled food order"
-    );
+    const error = new Error("Cannot create KOT for a cancelled food order");
 
     error.statusCode = 409;
     throw error;
   }
 
   const existingKot = await KitchenOrderTicket.findOne({
-    foodOrder: foodOrder._id
+    foodOrder: foodOrder._id,
   }).session(dbSession);
 
   if (existingKot) {
     const error = new Error(
-      "Kitchen order ticket already exists for this food order"
+      "Kitchen order ticket already exists for this food order",
     );
 
     error.statusCode = 409;
@@ -56,20 +57,18 @@ export const createKitchenOrderTicket = async ({
         kotNumber,
         foodOrder: foodOrder._id,
         table: foodOrder.table,
-        status: "PENDING"
-      }
+        status: "PENDING",
+      },
     ],
     {
-      session: dbSession
-    }
+      session: dbSession,
+    },
   );
 
   return kot;
 };
 
-export const getKitchenOrderTickets = async ({
-  status = null
-} = {}) => {
+export const getKitchenOrderTickets = async ({ status = null } = {}) => {
   const filter = {};
 
   if (status) {
@@ -77,10 +76,7 @@ export const getKitchenOrderTickets = async ({
   }
 
   return KitchenOrderTicket.find(filter)
-    .populate(
-      "foodOrder",
-      "orderNumber totalAmount customerNotes"
-    )
+    .populate("foodOrder", "orderNumber totalAmount customerNotes")
     .populate("table", "tableNumber")
     .sort({ createdAt: 1 })
     .lean();
@@ -99,19 +95,15 @@ export const getKitchenOrderTicketById = async (kotId) => {
   }
 
   const items = await FoodOrderItem.find({
-    order: kot.foodOrder._id
+    order: kot.foodOrder._id,
   }).lean();
 
   return {
     ...kot,
-    items
+    items,
   };
 };
-const transitionKotStatus = async ({
-  kotId,
-  nextStatus,
-  userId
-}) => {
+const transitionKotStatus = async ({ kotId, nextStatus, userId }) => {
   const kot = await KitchenOrderTicket.findById(kotId);
 
   if (!kot) {
@@ -126,10 +118,13 @@ const transitionKotStatus = async ({
     PENDING: ["COOKING", "CANCELLED"],
     COOKING: ["READY", "CANCELLED"],
     READY: [],
-    CANCELLED: []
+    CANCELLED: [],
   };
 
-  if (!allowedTransitions[currentStatus].includes(nextStatus)) {
+  if (
+    !allowedTransitions[currentStatus] ||
+    !allowedTransitions[currentStatus].includes(nextStatus)
+  ) {
     throw invalidTransition(currentStatus, nextStatus);
   }
 
@@ -147,30 +142,30 @@ const transitionKotStatus = async ({
 
   if (nextStatus === "CANCELLED") {
     kot.cancelledAt = new Date();
+    kot.cancelledBy = userId;
   }
 
   await kot.save();
-const updatedKot =
-  await getKitchenOrderTicketById(kot._id);
+  const updatedKot = await getKitchenOrderTicketById(kot._id);
 
-if (nextStatus === "COOKING") {
-  emitKotStarted(updatedKot);
-}
+  if (nextStatus === "COOKING") {
+    emitKotStarted(updatedKot);
+  }
 
-if (nextStatus === "READY") {
-  emitKotReady(updatedKot);
-}
+  if (nextStatus === "READY") {
+    emitKotReady(updatedKot);
+  }
 
-if (nextStatus === "CANCELLED") {
-  emitKotCancelled(updatedKot);
-}
-  return kot;
+  if (nextStatus === "CANCELLED") {
+    emitKotCancelled(updatedKot);
+  }
+  return updatedKot;
 };
 export const startCooking = async (kotId, userId) => {
   return transitionKotStatus({
     kotId,
     nextStatus: "COOKING",
-    userId
+    userId,
   });
 };
 
@@ -178,19 +173,14 @@ export const markKotReady = async (kotId, userId) => {
   return transitionKotStatus({
     kotId,
     nextStatus: "READY",
-    userId
+    userId,
   });
 };
-
 
 export const cancelKot = async (kotId, userId) => {
   return transitionKotStatus({
     kotId,
     nextStatus: "CANCELLED",
-    userId
+    userId,
   });
-    
-   
-
 };
-

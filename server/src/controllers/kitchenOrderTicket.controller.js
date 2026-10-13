@@ -7,21 +7,7 @@ import {
   cancelKot
 } from "../services/kitchenOrderTicket.service.js";
 
-export const createKot = async (req, res, next) => {
-  try {
-    const kot = await createKitchenOrderTicket({
-      foodOrderId: req.body.foodOrderId
-    });
 
-    return res.status(201).json({
-      success: true,
-      message: "Kitchen order ticket created successfully",
-      data: { kot }
-    });
-  } catch (error) {
-    next(error);
-  }
-};
 
 export const getKots = async (req, res, next) => {
   try {
