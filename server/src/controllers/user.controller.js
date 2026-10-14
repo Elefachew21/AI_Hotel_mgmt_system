@@ -40,28 +40,43 @@ import {
         next(error);
     }
 };
+
+
 const createStaffUser = async (req, res, next) => {
-    try {
-        const user = await createStaff(req.body);
-        res.status(201).json({
-            success: true,
-            message: "staff account Created Successfully !!!",
-            data: {
-                user: {
-                     id: user._id,
-                    firstName: user.firstName,
-                    lastName: user.lastName,
-                    email: user.email,
-                    phone: user.phone,
-                    role: user.role,
-                    status: user.status,
-                    createdAt: user.createdAt
-                }
-            }
-        })
-    }
-    catch (error) {
-        next(error);
-    }
-}
+  try {
+    const user = await createStaff({
+      username: req.body.username,
+      firstName: req.body.firstName,
+      lastName: req.body.lastName,
+      email: req.body.email,
+      phone: req.body.phone,
+      password: req.body.password,
+      roleId: req.body.roleId,
+
+      // Set by authenticate middleware, not supplied by the client.
+      actorId: req.user.id,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Staff account created successfully",
+      data: {
+        user: {
+          id: user._id,
+          username: user.username,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          phone: user.phone,
+          role: user.role,
+          roleRef: user.roleRef,
+          status: user.status,
+          createdAt: user.createdAt,
+        },
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
 export { getUser, listUsers,createStaffUser };

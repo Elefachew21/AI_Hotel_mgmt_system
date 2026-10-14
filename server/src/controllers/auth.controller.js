@@ -15,6 +15,7 @@ const register = async (req, res, next) => {
                     email: user.email,
                     phone: user.phone,
                     role: user.role,
+                    roleRef:user.roleRef,
                     status: user.status,
                     createdAt: user.createdAt
                 }
@@ -66,6 +67,8 @@ const login = async (req, res, next) => {
                     email: user.email,
                     phone: user.phone,
                     role: user.role,
+                                        roleRef:user.roleRef,
+
                     status: user.status
                 }
             }

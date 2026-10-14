@@ -7,9 +7,9 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon server.js",
     "start": "node server.js",
-        "create:admin": "node src/scripts/createSuperAdmin.js"
-
-
+    "create:admin": "node src/scripts/createSuperAdmin.js",
+    "seed:roles": "node src/scripts/seedRolesAndPermissions.js",
+    "migrate:user-role-refs": "node src/scripts/migrateUserRoleRefs.js"
   },
   "keywords": [],
   "author": "",
