@@ -7,7 +7,7 @@ import {
 } from "../controllers/user.controller.js";
 
 import { authenticate } from "../middleware/authenticate.js";
-import { authorize } from "../middleware/authorize.js";
+import { authorizePermission } from "../middleware/authorize.js";
 import { validate } from "../middleware/validate.js";
 import { createStaffSchema } from "../utils/validation/auth.validation.js";
 
@@ -15,11 +15,11 @@ const router = express.Router();
 router.post(
   "/",
   authenticate,
-  authorize("SUPER_ADMIN"),
+  authorizePermission("users:create-staff"),
   validate(createStaffSchema),
   createStaffUser,
 );
-router.get("/", authenticate, authorize("SUPER_ADMIN"), listUsers);
-router.get("/:id", authenticate, authorize("SUPER_ADMIN"), getUser);
+router.get("/", authenticate, authorizePermission("users:read"), listUsers);
+router.get("/:id", authenticate, authorizePermission("users:read"), getUser);
 
 export default router;
