@@ -1,13 +1,10 @@
-
 import dotenv from "dotenv";
 
 import connectDB from "../config/database.js";
 import Permission from "../models/Permission.js";
 import Role from "../models/Role.js";
 import permissionCatalog from "../constants/permissionCatalog.js";
-
 dotenv.config();
-
 // These assignments preserve the access patterns found in
 // the current routes. They are not new authorization rules.
 const builtInRoles = [
@@ -22,6 +19,7 @@ const builtInRoles = [
     displayName: "Manager",
     description: "Manages hotel operations within assigned authority.",
     permissions: [
+      "users:read",
       "reservations:create",
       "reservations:confirm",
       "reservations:check-in",
@@ -51,11 +49,11 @@ const builtInRoles = [
       "kots:cancel",
       "housekeeping:start-task",
       "housekeeping:complete-task",
-      
-"roles:create",
-"roles:read",
-"roles:update",
-"roles:manage-permissions",
+
+      "roles:create",
+      "roles:read",
+      "roles:update",
+      "roles:manage-permissions",
     ],
   },
   {
@@ -79,11 +77,7 @@ const builtInRoles = [
     name: "CASHIER",
     displayName: "Cashier",
     description: "Handles payments and folio operations.",
-    permissions: [
-      "payments:create",
-      "folios:read",
-      "folios:close",
-    ],
+    permissions: ["payments:create", "folios:read", "folios:close"],
   },
   {
     name: "KITCHEN_STAFF",
@@ -107,10 +101,7 @@ const builtInRoles = [
     name: "HOUSEKEEPER",
     displayName: "Housekeeper",
     description: "Performs assigned housekeeping tasks.",
-    permissions: [
-      "housekeeping:start-task",
-      "housekeeping:complete-task",
-    ],
+    permissions: ["housekeeping:start-task", "housekeeping:complete-task"],
   },
   {
     name: "MAINTENANCE_TECH",
@@ -145,12 +136,12 @@ const seedRolesAndPermissions = async () => {
             isActive: true,
           },
         },
-        { upsert: true, runValidators: true }
+        { upsert: true, runValidators: true },
       );
     }
 
     console.log(
-      `Permission definitions processed: ${permissionCatalog.length}`
+      `Permission definitions processed: ${permissionCatalog.length}`,
     );
 
     // 2. Load permissions once and create a key-to-ID lookup.
@@ -160,10 +151,7 @@ const seedRolesAndPermissions = async () => {
     }).select("_id key");
 
     const permissionIdByKey = new Map(
-      permissions.map((permission) => [
-        permission.key,
-        permission._id,
-      ])
+      permissions.map((permission) => [permission.key, permission._id]),
     );
 
     // 3. Fail rather than silently seed incomplete role assignments.
@@ -176,7 +164,7 @@ const seedRolesAndPermissions = async () => {
         if (!permissionIdByKey.has(key)) {
           throw new Error(
             `Permission "${key}" is missing or inactive. ` +
-            `Cannot seed role "${role.name}".`
+              `Cannot seed role "${role.name}".`,
           );
         }
       }
@@ -203,7 +191,7 @@ const seedRolesAndPermissions = async () => {
             createdBy: null,
           },
         },
-        { upsert: true, runValidators: true }
+        { upsert: true, runValidators: true },
       );
     }
 

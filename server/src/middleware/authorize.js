@@ -1,25 +1,22 @@
 export const authorize = (...allowedRoles) => {
-    return (req, res, next) => {
-        if (!req.user) {
-            return res.status(401).json({
-                success: false,
-                message: "Authentication required"
-            });
-        }
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
 
-        if (!allowedRoles.includes(req.user.role)) {
-            return res.status(403).json({
-                success: false,
-                message: "You do not have permission to perform this action"
-            });
-        }
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to perform this action",
+      });
+    }
 
-        next();
-    };
+    next();
+  };
 };
-
-
-
 
 export const authorizePermission = (requiredPermission) => {
   return (req, res, next) => {
@@ -29,10 +26,19 @@ export const authorizePermission = (requiredPermission) => {
         message: "Authentication required",
       });
     }
+    if (
+      typeof requiredPermission !== "string" ||
+      requiredPermission.trim() === ""
+    ) {
+      return res.status(500).json({
+        success: false,
+        message: "Authorization is not configured correctly",
+      });
+    }
 
     const role = req.user.roleRef;
 
-    if (!role || !role.isActive) {
+    if (!role || role.isActive !== true || !Array.isArray(role.permissions)) {
       return res.status(403).json({
         success: false,
         message: "No active role is assigned to this account",
@@ -41,8 +47,9 @@ export const authorizePermission = (requiredPermission) => {
 
     const hasPermission = role.permissions.some(
       (permission) =>
+        permission &&
         permission.key === requiredPermission &&
-        permission.isActive === true
+        permission.isActive === true,
     );
 
     if (!hasPermission) {
