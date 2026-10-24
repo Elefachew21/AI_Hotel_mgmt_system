@@ -46,22 +46,20 @@ const roleSchema = new mongoose.Schema(
       ref: "User",
       default: null,
     },
-    
-    // Permissions this role is explicitly allowed to delegate
-    // when assigning permissions to another role.
-    delegablePermissions: {
-      type: [
-        {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Permission",
-        },
-      ],
-      default: [],
+
+    isDeactivationProtected: {
+      type: Boolean,
+      default: false,
+    },
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
     },
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Prevent duplicate role names within this database.

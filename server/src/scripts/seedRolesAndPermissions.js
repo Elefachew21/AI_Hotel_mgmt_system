@@ -13,6 +13,7 @@ const builtInRoles = [
     displayName: "Super Administrator",
     description: "Manages the hotel's system and administrative operations.",
     permissions: "ALL",
+    isDeactivationProtected: true,
   },
   {
     name: "MANAGER",
@@ -55,6 +56,7 @@ const builtInRoles = [
       "roles:update",
       "roles:manage-permissions",
     ],
+    isDeactivationProtected: true,
   },
   {
     name: "RECEPTIONIST",
@@ -185,6 +187,8 @@ const seedRolesAndPermissions = async () => {
             description: role.description,
             permissions: permissionIds,
             isSystemRole: true,
+
+            isDeactivationProtected: role.isDeactivationProtected ?? false,
           },
           $setOnInsert: {
             isActive: true,
