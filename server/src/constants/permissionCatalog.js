@@ -13,6 +13,26 @@ const permissionCatalog = [
     description: "View user records.",
   },
 
+  {
+    key: "users:update",
+    name: "Update Staff Profile",
+    module: "Users",
+    description: "Update permitted staff profile fields.",
+  },
+  {
+    key: "users:change-role",
+    name: "Change Staff Role",
+    module: "Users",
+    description:
+      "Change a staff member's assigned role within the actor's authority.",
+  },
+  {
+    key: "users:change-status",
+    name: "Change Staff Status",
+    module: "Users",
+    description: "Activate, deactivate, or suspend staff accounts.",
+  },
+
   // Customers
   {
     key: "customers:create",
@@ -203,7 +223,6 @@ const permissionCatalog = [
     description: "Complete a housekeeping task.",
   },
 
-  
   // Role management
   {
     key: "roles:create",

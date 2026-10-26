@@ -2,6 +2,7 @@ import {
   getUsers,
   getUserById,
   createStaff,
+  updateStaff,
 } from "../services/user.service.js";
 
 const listUsers = async (req, res, next) => {
@@ -53,6 +54,7 @@ const createStaffUser = async (req, res, next) => {
 
       // Set by authenticate middleware, not supplied by the client.
       actorId: req.user.id,
+      requestId: req.id ?? null,
     });
 
     return res.status(201).json({
@@ -77,4 +79,38 @@ const createStaffUser = async (req, res, next) => {
     return next(error);
   }
 };
-export { getUser, listUsers, createStaffUser };
+
+const updateStaffUser = async (req, res, next) => {
+  try {
+    const user = await updateStaff({
+      userId: req.params.id,
+      actorId: req.user.id,
+      updates: req.body,
+      requestId: req.id ?? null,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Staff account updated successfully",
+      data: {
+        user: {
+          id: user._id,
+          username: user.username,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          phone: user.phone,
+          role: user.role,
+          roleRef: user.roleRef,
+          status: user.status,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+        },
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export { getUser, listUsers, createStaffUser, updateStaffUser };

@@ -5,9 +5,12 @@ import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import roleRoutes from "./routes/role.routes.js";
 import staffCreationPolicyRoutes from "./routes/staffCreationPolicy.routes.js";
+import { requestLogger } from "./middleware/requestLogger.js";
+import { errorHandler } from "./middleware/errorHandler.js";
 const app = express();
 app.use(helmet());
 app.use(cors());
+app.use(requestLogger);
 app.use(express.json());
 // Routes for authentication and Authorization
 app.use("/api/auth", authRoutes);
@@ -32,14 +35,6 @@ app.use((req, res) => {
 });
 
 // Centralized error handler
-app.use((err, req, res, next) => {
-  console.error(err);
+app.use(errorHandler);
 
-  const statusCode = err.statusCode || 500;
-
-  res.status(statusCode).json({
-    success: false,
-    message: statusCode === 500 ? "Internal server error" : err.message,
-  });
-});
 export default app;

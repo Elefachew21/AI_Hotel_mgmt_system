@@ -4,12 +4,16 @@ import {
   listUsers,
   getUser,
   createStaffUser,
+  updateStaffUser,
 } from "../controllers/user.controller.js";
 
 import { authenticate } from "../middleware/authenticate.js";
 import { authorizePermission } from "../middleware/authorize.js";
 import { validate } from "../middleware/validate.js";
-import { createStaffSchema } from "../utils/validation/auth.validation.js";
+import {
+  createStaffSchema,
+  updateStaffSchema,
+} from "../utils/validation/auth.validation.js";
 
 const router = express.Router();
 router.post(
@@ -21,5 +25,11 @@ router.post(
 );
 router.get("/", authenticate, authorizePermission("users:read"), listUsers);
 router.get("/:id", authenticate, authorizePermission("users:read"), getUser);
-
+router.patch(
+  "/:id",
+  authenticate,
+  authorizePermission("users:update"),
+  validate(updateStaffSchema),
+  updateStaffUser,
+);
 export default router;

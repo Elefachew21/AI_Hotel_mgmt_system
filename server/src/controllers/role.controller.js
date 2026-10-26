@@ -35,6 +35,7 @@ const updateRolePermissionsController = async (req, res, next) => {
       actorId,
       roleId: req.params.id,
       permissionIds: req.body.permissionIds,
+      requestId: req.id ?? null,
     });
 
     return res.status(200).json({

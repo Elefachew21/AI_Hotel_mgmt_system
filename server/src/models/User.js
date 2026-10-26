@@ -1,4 +1,3 @@
-
 import mongoose from "mongoose";
 const userSchema = new mongoose.Schema(
   {
@@ -26,7 +25,7 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
-   phone: {
+    phone: {
       type: String,
       trim: true,
     },
@@ -36,12 +35,12 @@ const userSchema = new mongoose.Schema(
       select: false,
     },
     // Keep temporarily for compatibility with existing code.
-  role: {
-  type: String,
-  required: true,
-  trim: true,
-  uppercase: true,
-}, // New database-backed role relationship.
+    role: {
+      type: String,
+      required: true,
+      trim: true,
+      uppercase: true,
+    }, // New database-backed role relationship.
     roleRef: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Role",
@@ -57,7 +56,7 @@ const userSchema = new mongoose.Schema(
       type: Date,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 userSchema.index({ roleRef: 1 });
 export default mongoose.model("User", userSchema);

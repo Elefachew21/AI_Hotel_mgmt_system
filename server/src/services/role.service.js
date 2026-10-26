@@ -1,24 +1,30 @@
 import mongoose from "mongoose";
 import User from "../models/User.js";
+import { recordAuditEvent } from "./auditLog.service.js";
+
 import Role from "../models/Role.js";
 import Permission from "../models/Permission.js";
 import DelegationPolicy from "../models/DelegationPolicy.js";
 import { createError } from "../errors/appError.js";
-const getActiveActor = async (actorId) => {
+const getActiveActor = async (actorId, session = null) => {
   if (!mongoose.isValidObjectId(actorId)) {
     throw createError("Invalid actor ID", 400);
   }
 
-  const actor = await User.findById(actorId)
-    .select("status roleRef")
-    .populate({
-      path: "roleRef",
-      select: "name isActive permissions",
-      populate: {
-        path: "permissions",
-        select: "key isActive",
-      },
-    });
+  let query = User.findById(actorId).select("status roleRef");
+
+  if (session) {
+    query = query.session(session);
+  }
+
+  const actor = await query.populate({
+    path: "roleRef",
+    select: "name isActive permissions",
+    populate: {
+      path: "permissions",
+      select: "key isActive",
+    },
+  });
 
   if (
     !actor ||
@@ -191,49 +197,107 @@ const createRole = async ({
   }
 };
 
-const updateRolePermissions = async ({ actorId, roleId, permissionIds }) => {
-  const actor = await getActiveActor(actorId);
-
-  requirePermission(actor, "roles:update");
-  requirePermission(actor, "roles:manage-permissions");
-
+const updateRolePermissions = async ({
+  actorId,
+  roleId,
+  permissionIds,
+  requestId = null,
+}) => {
   if (!mongoose.isValidObjectId(roleId)) {
     throw createError("Invalid role ID", 400);
   }
 
-  const targetRole = await Role.findById(roleId);
-  if (!targetRole) {
-    throw createError("Role not found", 404);
-  }
-  if (
-    targetRole.name === "SUPER_ADMIN" &&
-    actor.roleRef.name !== "SUPER_ADMIN"
-  ) {
-    throw createError("Only Super Admin can modify the SUPER_ADMIN role", 403);
-  }
-  if (
-    actor.roleRef.name !== "SUPER_ADMIN" &&
-    actor.roleRef.name !== "MANAGER" &&
-    (targetRole.isSystemRole ||
-      targetRole.name === "SUPER_ADMIN" ||
-      targetRole.name === "MANAGER")
-  ) {
-    throw createError(
-      "Only Super Admins and Managers can modify permissions of system roles",
-      403,
+  const updatedRole = await mongoose.connection.transaction(async (session) => {
+    const actor = await getActiveActor(actorId, session);
+
+    requirePermission(actor, "roles:update");
+    requirePermission(actor, "roles:manage-permissions");
+
+    const targetRole = await Role.findById(roleId).session(session);
+
+    if (!targetRole) {
+      throw createError("Role not found", 404);
+    }
+
+    if (
+      targetRole.name === "SUPER_ADMIN" &&
+      actor.roleRef.name !== "SUPER_ADMIN"
+    ) {
+      throw createError(
+        "Only Super Admin can modify the SUPER_ADMIN role",
+        403,
+      );
+    }
+
+    if (
+      actor.roleRef.name !== "SUPER_ADMIN" &&
+      actor.roleRef.name !== "MANAGER" &&
+      (targetRole.isSystemRole ||
+        targetRole.name === "SUPER_ADMIN" ||
+        targetRole.name === "MANAGER")
+    ) {
+      throw createError(
+        "Only Super Admins and Managers can modify permissions of system roles",
+        403,
+      );
+    }
+
+    const previousPermissionIds = targetRole.permissions.map((id) =>
+      id.toString(),
     );
-  }
 
-  const permissions = await getActivePermissions(permissionIds);
-  await enforceDelegationPolicy(actor, permissions);
+    const previousPermissions = await Permission.find({
+      _id: { $in: previousPermissionIds },
+    })
+      .select("key")
+      .session(session);
 
-  targetRole.permissions = permissions.map((permission) => permission._id);
+    const permissions = await getActivePermissions(permissionIds, session);
 
-  targetRole.updatedBy = actor._id;
+    await enforceDelegationPolicy(actor, permissions, session);
 
-  await targetRole.save();
-  await targetRole.populate("updatedBy", "username firstName lastName email");
-  return targetRole;
+    const previousKeys = new Set(
+      previousPermissions.map((permission) => permission.key),
+    );
+
+    const nextKeys = new Set(permissions.map((permission) => permission.key));
+
+    const permissionsAdded = [...nextKeys].filter(
+      (key) => !previousKeys.has(key),
+    );
+
+    const permissionsRemoved = [...previousKeys].filter(
+      (key) => !nextKeys.has(key),
+    );
+
+    targetRole.permissions = permissions.map((permission) => permission._id);
+
+    targetRole.updatedBy = actor._id;
+
+    await targetRole.save({ session });
+
+    await recordAuditEvent({
+      actor: actor._id,
+      actorRole: actor.roleRef.name,
+      action: "roles.permissions_updated",
+      resourceType: "Role",
+      resourceId: targetRole._id,
+      outcome: "SUCCESS",
+      requestId,
+      details: {
+        roleName: targetRole.name,
+        permissionsAdded,
+        permissionsRemoved,
+      },
+      session,
+    });
+
+    return targetRole;
+  });
+
+  await updatedRole.populate("updatedBy", "username firstName lastName email");
+
+  return updatedRole;
 };
 
 const listRoles = async ({ actorId }) => {
