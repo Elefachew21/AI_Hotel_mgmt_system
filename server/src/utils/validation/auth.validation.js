@@ -54,4 +54,49 @@ const updateStaffSchema = Joi.object({
   .min(1)
   .unknown(false);
 
-export { registerSchema, loginSchema, createStaffSchema, updateStaffSchema };
+const forgotPasswordSchema = Joi.object({
+  email: Joi.string().trim().lowercase().email().required(),
+}).unknown(false);
+
+const resetPasswordSchema = Joi.object({
+  email: Joi.string().trim().lowercase().email().required(),
+  code: Joi.string()
+    .pattern(/^\d{6}$/)
+    .required()
+    .messages({
+      "string.pattern.base": "Verification code must contain six digits.",
+    }),
+  password: Joi.string()
+    .min(8)
+    .max(128)
+    .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/)
+    .required()
+    .messages({
+      "string.pattern.base":
+        "Password must contain uppercase, lowercase, number, and special character.",
+    }),
+}).unknown(false);
+const verifyEmailSchema = Joi.object({
+  email: Joi.string().trim().lowercase().email().required(),
+  code: Joi.string()
+    .pattern(/^\d{6}$/)
+    .required()
+    .messages({
+      "string.pattern.base": "Verification code must contain six digits.",
+    }),
+}).unknown(false);
+
+const resendVerificationSchema = Joi.object({
+  email: Joi.string().trim().lowercase().email().required(),
+}).unknown(false);
+
+export {
+  registerSchema,
+  loginSchema,
+  createStaffSchema,
+  updateStaffSchema,
+  resetPasswordSchema,
+  forgotPasswordSchema,
+  verifyEmailSchema,
+  resendVerificationSchema,
+};

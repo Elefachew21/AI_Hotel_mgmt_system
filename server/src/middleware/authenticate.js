@@ -40,7 +40,7 @@ export const authenticate = async (req, res, next) => {
   // 2. Load the current account and its database-backed role.
   try {
     const user = await User.findById(payload.sub)
-      .select("role roleRef status")
+      .select("role roleRef status tokenVersion")
       .populate({
         path: "roleRef",
         select: "name permissions isActive",
@@ -49,11 +49,20 @@ export const authenticate = async (req, res, next) => {
           select: "key isActive",
         },
       });
-
     if (!user) {
       return res.status(401).json({
         success: false,
         message: "User account not found",
+      });
+    }
+    // Reject tokens issued under an older password/session version.
+    if (
+      !Number.isInteger(payload.tokenVersion) ||
+      payload.tokenVersion !== (user.tokenVersion ?? 0)
+    ) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid or expired token. Please log in again.",
       });
     }
 

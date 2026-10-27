@@ -5,7 +5,7 @@ import Role from "../models/Role.js";
 import { hashPassword } from "./auth.service.js";
 import StaffCreationPolicy from "../models/StaffCreationPolicy.js";
 import { createError } from "../errors/appError.js";
-
+import { deliverOtp } from "./otpDelivery.service.js";
 const getUsers = async ({ page = 1, limit = 25 } = {}) => {
   const parsedPage = Number(page);
   const parsedLimit = Number(limit);
@@ -64,8 +64,9 @@ const createStaff = async ({
   const normalizedEmail = email.toLowerCase().trim();
   const passwordHash = await hashPassword(password);
 
-  return mongoose.connection.transaction(async (session) => {
-    // 1. Load the actor and their current role.
+  // 1. Create the staff account and audit event in one transaction.
+  const createdUser = await mongoose.connection.transaction(async (session) => {
+    // Load the actor and their current role.
     const actor = await User.findById(actorId)
       .select("status roleRef")
       .populate({
@@ -91,7 +92,7 @@ const createStaff = async ({
 
     const isSuperAdmin = actor.roleRef.name === "SUPER_ADMIN";
 
-    // 2. Check staff-creation permission.
+    // Check staff-creation permission.
     const hasCreatePermission = actor.roleRef.permissions.some(
       (permission) =>
         permission.isActive && permission.key === "users:create-staff",
@@ -105,7 +106,7 @@ const createStaff = async ({
       throw error;
     }
 
-    // 3. Require an active staff-creation policy.
+    // Require an active staff-creation policy.
     const policy = await StaffCreationPolicy.findOne({
       actorRole: actor.roleRef._id,
       isActive: true,
@@ -119,7 +120,7 @@ const createStaff = async ({
       throw error;
     }
 
-    // 4. Load the requested target role.
+    // Load the requested target role.
     const targetRole = await Role.findById(roleId).session(session);
 
     if (!targetRole || !targetRole.isActive) {
@@ -128,7 +129,7 @@ const createStaff = async ({
       throw error;
     }
 
-    // 5. Preserve permanent role-hierarchy restrictions.
+    // Preserve permanent role-hierarchy restrictions.
     if (targetRole.name === "SUPER_ADMIN") {
       const error = new Error(
         "Super Admin accounts cannot be created through staff creation",
@@ -145,7 +146,7 @@ const createStaff = async ({
       throw error;
     }
 
-    // 6. Enforce the staff-creation policy.
+    // Enforce the staff-creation policy.
     const targetIsAllowed =
       isSuperAdmin && policy.allowAllActiveRoles
         ? true
@@ -163,7 +164,7 @@ const createStaff = async ({
       throw error;
     }
 
-    // 7. Check for an existing email.
+    // Check for an existing email.
     const existingUser = await User.findOne({
       email: normalizedEmail,
     }).session(session);
@@ -174,7 +175,7 @@ const createStaff = async ({
       throw error;
     }
 
-    // 8. Create the staff account within the transaction.
+    // Create the unverified staff account.
     const [user] = await User.create(
       [
         {
@@ -184,6 +185,7 @@ const createStaff = async ({
           email: normalizedEmail,
           phone,
           passwordHash,
+          emailVerified: false,
           role: targetRole.name,
           roleRef: targetRole._id,
           status: "ACTIVE",
@@ -192,7 +194,7 @@ const createStaff = async ({
       { session },
     );
 
-    // 9. Record the successful creation in the same transaction.
+    // Record account creation in the same transaction.
     await recordAuditEvent({
       actor: actor._id,
       actorRole: actor.roleRef.name,
@@ -210,6 +212,31 @@ const createStaff = async ({
 
     return user;
   });
+
+  // 2. The transaction has committed. Now send the verification OTP.
+  let verificationEmailSent = false;
+
+  try {
+    await deliverOtp({
+      userId: createdUser._id,
+      email: createdUser.email,
+      purpose: "STAFF_EMAIL_VERIFICATION",
+    });
+
+    verificationEmailSent = true;
+  } catch (error) {
+    // Keep the committed account if email delivery fails.
+    console.error("Staff verification email delivery failed.", {
+      code: error.code,
+      message: error.message,
+    });
+  }
+
+  // 3. Return the created account and email-delivery result.
+  return {
+    user: createdUser,
+    verificationEmailSent,
+  };
 };
 
 const updateStaff = async ({ userId, actorId, updates, requestId = null }) => {

@@ -13,16 +13,18 @@ const comparePassword = async (password, passwordHash) => {
   return await bcrypt.compare(password, passwordHash);
 };
 const findUserByEmail = async (email) => {
-  return await User.findOne({
+  const user = await User.findOne({
     email: email.toLowerCase().trim(),
-  }).select("+passwordHash");
+  }).select("+passwordHash tokenVersion status emailVerified");
+
+  return user;
 };
 const createUser = async ({ firstName, lastName, email, phone, password }) => {
   const existingUser = await User.findOne({
     email: email.toLowerCase().trim(),
   });
   if (existingUser) {
-    const error = new Error("Email is already Registered");
+    const error = new Error("Email is al're'ady Registered");
     error.statusCode = 409;
     throw error;
   }

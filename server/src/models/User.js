@@ -52,8 +52,38 @@ const userSchema = new mongoose.Schema(
       enum: ["ACTIVE", "INACTIVE", "SUSPENDED"],
       default: "ACTIVE",
     },
+    tokenVersion: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     lastLoginAt: {
       type: Date,
+    },
+
+    // Store only the hash of the password-reset token.
+    passwordResetTokenHash: {
+      type: String,
+      default: null,
+      select: false,
+    },
+
+    // The reset token must expire.
+    passwordResetExpiresAt: {
+      type: Date,
+      default: null,
+      select: false,
+    },
+
+    emailVerified: {
+      type: Boolean,
+      default: false,
+      required: true,
+    },
+    passwordResetAttempts: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
   },
   { timestamps: true },

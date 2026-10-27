@@ -43,7 +43,7 @@ const getUser = async (req, res, next) => {
 
 const createStaffUser = async (req, res, next) => {
   try {
-    const user = await createStaff({
+    const { user, verificationEmailSent } = await createStaff({
       username: req.body.username,
       firstName: req.body.firstName,
       lastName: req.body.lastName,
@@ -71,8 +71,14 @@ const createStaffUser = async (req, res, next) => {
           role: user.role,
           roleRef: user.roleRef,
           status: user.status,
+          emailVerified: user.emailVerified,
+
           createdAt: user.createdAt,
         },
+        verificationEmailSent,
+        message: verificationEmailSent
+          ? "A verification code has been sent to the staff member's email."
+          : "The account was created, but the verification email could not be sent. Please retry verification later.",
       },
     });
   } catch (error) {
