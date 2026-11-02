@@ -15,7 +15,7 @@ const comparePassword = async (password, passwordHash) => {
 const findUserByEmail = async (email) => {
   const user = await User.findOne({
     email: email.toLowerCase().trim(),
-  }).select("+passwordHash tokenVersion status emailVerified");
+  }).select("+passwordHash tokenVersion status role emailVerified");
 
   return user;
 };

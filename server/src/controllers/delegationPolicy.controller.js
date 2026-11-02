@@ -9,6 +9,7 @@ const saveDelegationPolicyController = async (req, res, next) => {
       actorRoleId: req.body.actorRoleId,
       delegablePermissionIds: req.body.delegablePermissionIds,
       isActive: req.body.isActive,
+      requestId: req.id ?? null,
     });
 
     return res.status(200).json({

@@ -4,16 +4,22 @@ import Role from "../models/Role.js";
 import Permission from "../models/Permission.js";
 import DelegationPolicy from "../models/DelegationPolicy.js";
 import { createError } from "../errors/appError.js";
+import { recordAuditEvent } from "./auditLog.service.js";
 
 // Only an active Super Admin can configure delegation policies.
-const verifySuperAdmin = async (actorId) => {
+const verifySuperAdmin = async (actorId, session) => {
   if (!mongoose.isValidObjectId(actorId)) {
     throw createError("Invalid actor ID", 400);
   }
-  const actor = await User.findById(actorId).select("status roleRef").populate({
-    path: "roleRef",
-    select: "name isActive",
-  });
+
+  const actor = await User.findById(actorId)
+    .select("status roleRef")
+    .session(session)
+    .populate({
+      path: "roleRef",
+      select: "name isActive",
+      options: { session },
+    });
 
   if (
     !actor ||
@@ -27,16 +33,16 @@ const verifySuperAdmin = async (actorId) => {
       403,
     );
   }
+
+  return actor;
 };
 
-// Verify that the role whose delegation rights are being
-// configured exists, is active, and is not SUPER_ADMIN.
-const getEligibleActorRole = async (actorRoleId) => {
+const getEligibleActorRole = async (actorRoleId, session) => {
   if (!mongoose.isValidObjectId(actorRoleId)) {
     throw createError("Invalid target role ID", 400);
   }
 
-  const role = await Role.findById(actorRoleId);
+  const role = await Role.findById(actorRoleId).session(session);
 
   if (!role || !role.isActive) {
     throw createError("Role does not exist or is inactive", 404);
@@ -49,13 +55,12 @@ const getEligibleActorRole = async (actorRoleId) => {
   return role;
 };
 
-// Validate permission IDs against active Permission documents.
-const validateDelegablePermissions = async (permissionIds) => {
+const validateDelegablePermissions = async (permissionIds, session) => {
   if (!Array.isArray(permissionIds)) {
     throw createError("delegablePermissionIds must be an array", 400);
   }
 
-  const ids = permissionIds.map((id) => String(id));
+  const ids = permissionIds.map(String);
 
   if (ids.some((id) => !mongoose.isValidObjectId(id))) {
     throw createError("One or more permission IDs are invalid", 400);
@@ -65,7 +70,6 @@ const validateDelegablePermissions = async (permissionIds) => {
     throw createError("Duplicate permission IDs are not allowed", 400);
   }
 
-  // An empty array is valid: it means no permissions may be delegated.
   if (ids.length === 0) {
     return [];
   }
@@ -73,7 +77,9 @@ const validateDelegablePermissions = async (permissionIds) => {
   const permissions = await Permission.find({
     _id: { $in: ids },
     isActive: true,
-  }).select("_id");
+  })
+    .select("_id")
+    .session(session);
 
   if (permissions.length !== ids.length) {
     throw createError(
@@ -85,58 +91,89 @@ const validateDelegablePermissions = async (permissionIds) => {
   return permissions.map((permission) => permission._id);
 };
 
-/**
- * Create a delegation policy or update an existing one.
- *
- * actorId: the logged-in Super Admin's user ID.
- * actorRoleId: the role whose delegation authority is controlled.
- * delegablePermissionIds: IDs of permissions this role may delegate.
- * isActive: optional policy activation setting.
- */
 const saveDelegationPolicy = async ({
   actorId,
   actorRoleId,
   delegablePermissionIds,
   isActive,
+  requestId = null,
 }) => {
-  await verifySuperAdmin(actorId);
+  return mongoose.connection.transaction(async (session) => {
+    const actor = await verifySuperAdmin(actorId, session);
 
-  const actorRole = await getEligibleActorRole(actorRoleId);
+    const actorRole = await getEligibleActorRole(actorRoleId, session);
 
-  const permissionIds = await validateDelegablePermissions(
-    delegablePermissionIds,
-  );
+    const permissionIds = await validateDelegablePermissions(
+      delegablePermissionIds,
+      session,
+    );
 
-  if (isActive !== undefined && typeof isActive !== "boolean") {
-    throw createError("isActive must be a boolean", 400);
-  }
-
-  let policy = await DelegationPolicy.findOne({
-    actorRole: actorRole._id,
-  });
-
-  if (policy) {
-    // Preserve the current activation state unless explicitly changed.
-    policy.delegablePermissions = permissionIds;
-    policy.updatedBy = actorId;
-
-    if (isActive !== undefined) {
-      policy.isActive = isActive;
+    if (isActive !== undefined && typeof isActive !== "boolean") {
+      throw createError("isActive must be a boolean", 400);
     }
 
-    await policy.save();
+    let policy = await DelegationPolicy.findOne({
+      actorRole: actorRole._id,
+    }).session(session);
+
+    const isCreating = !policy;
+
+    // Capture the old values before changing the document.
+    const previous = policy
+      ? {
+          delegablePermissionIds: policy.delegablePermissions.map(String),
+          isActive: policy.isActive,
+        }
+      : null;
+
+    if (policy) {
+      policy.delegablePermissions = permissionIds;
+      policy.updatedBy = actor._id;
+
+      if (isActive !== undefined) {
+        policy.isActive = isActive;
+      }
+
+      await policy.save({ session });
+    } else {
+      [policy] = await DelegationPolicy.create(
+        [
+          {
+            actorRole: actorRole._id,
+            delegablePermissions: permissionIds,
+            isActive: isActive ?? true,
+            createdBy: actor._id,
+            updatedBy: actor._id,
+          },
+        ],
+        { session },
+      );
+    }
+
+    await recordAuditEvent({
+      action: isCreating
+        ? "delegation_policy.created"
+        : "delegation_policy.updated",
+      actor: actor._id,
+      actorRole: actor.roleRef._id,
+      resourceType: "DelegationPolicy",
+      resourceId: policy._id,
+      outcome: "SUCCESS",
+      requestId,
+      details: {
+        targetRoleId: String(actorRole._id),
+        targetRoleName: actorRole.name,
+        previous,
+        current: {
+          delegablePermissionIds: permissionIds.map(String),
+          isActive: policy.isActive,
+        },
+      },
+      session,
+    });
+
     return policy;
-  }
-
-  policy = await DelegationPolicy.create({
-    actorRole: actorRole._id,
-    delegablePermissions: permissionIds,
-    isActive: isActive ?? true,
-    createdBy: actorId,
-    updatedBy: actorId,
   });
-
-  return policy;
 };
 
 export { saveDelegationPolicy };

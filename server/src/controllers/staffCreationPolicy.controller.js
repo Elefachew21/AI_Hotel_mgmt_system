@@ -11,6 +11,7 @@ const savePolicy = async (req, res, next) => {
       allowedTargetRoleIds: req.body.allowedTargetRoleIds,
       allowAllActiveRoles: req.body.allowAllActiveRoles,
       isActive: req.body.isActive,
+      requestId: req.id ?? null,
     });
 
     return res.status(200).json({

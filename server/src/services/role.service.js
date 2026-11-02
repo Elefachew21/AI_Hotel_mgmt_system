@@ -56,7 +56,7 @@ const requirePermission = (actor, permissionKey) => {
   }
 };
 
-const getActivePermissions = async (permissionIds) => {
+const getActivePermissions = async (permissionIds, session = null) => {
   if (!Array.isArray(permissionIds)) {
     throw createError("permissions must be an array of permission IDs", 400);
   }
@@ -75,10 +75,14 @@ const getActivePermissions = async (permissionIds) => {
     return [];
   }
 
-  const permissions = await Permission.find({
+  let query = Permission.find({
     _id: { $in: ids },
     isActive: true,
   }).select("_id key isActive");
+
+  if (session) query = query.session(session);
+
+  const permissions = await query;
 
   if (permissions.length !== ids.length) {
     throw createError(
@@ -90,19 +94,22 @@ const getActivePermissions = async (permissionIds) => {
   return permissions;
 };
 
-const enforceDelegationPolicy = async (actor, permissions) => {
-  // Super Admin can grant any existing active permission.
+const enforceDelegationPolicy = async (actor, permissions, session = null) => {
   if (actor.roleRef.name === "SUPER_ADMIN") {
     return;
   }
 
-  const policy = await DelegationPolicy.findOne({
+  let query = DelegationPolicy.findOne({
     actorRole: actor.roleRef._id,
     isActive: true,
   }).populate({
     path: "delegablePermissions",
     select: "key isActive",
   });
+
+  if (session) query = query.session(session);
+
+  const policy = await query;
 
   if (!policy) {
     throw createError("No active delegation policy exists for your role", 403);
@@ -149,44 +156,77 @@ const createRole = async ({
   displayName,
   description = "",
   permissionIds = [],
+  requestId = null,
 }) => {
-  const actor = await getActiveActor(actorId);
-
-  requirePermission(actor, "roles:create");
-  requirePermission(actor, "roles:manage-permissions");
-
-  const normalizedName = validateRoleName(name);
-
-  if (normalizedName === "SUPER_ADMIN") {
-    throw createError("SUPER_ADMIN cannot be created as a custom role", 403);
-  }
-
-  if (typeof displayName !== "string" || !displayName.trim()) {
-    throw createError("Role displayName is required", 400);
-  }
-
-  if (actor.roleRef.name === "MANAGER" && normalizedName === "MANAGER") {
-    throw createError("Managers cannot create another MANAGER role", 403);
-  }
-
-  const existingRole = await Role.findOne({ name: normalizedName });
-
-  if (existingRole) {
-    throw createError("A role with this name already exists", 409);
-  }
-
-  const permissions = await getActivePermissions(permissionIds);
-  await enforceDelegationPolicy(actor, permissions);
-
   try {
-    return await Role.create({
-      name: normalizedName,
-      displayName: displayName.trim(),
-      description: typeof description === "string" ? description.trim() : "",
-      permissions: permissions.map((permission) => permission._id),
-      isSystemRole: false,
-      isActive: true,
-      createdBy: actor._id,
+    return await mongoose.connection.transaction(async (session) => {
+      const actor = await getActiveActor(actorId, session);
+
+      requirePermission(actor, "roles:create");
+      requirePermission(actor, "roles:manage-permissions");
+
+      const normalizedName = validateRoleName(name);
+
+      if (normalizedName === "SUPER_ADMIN") {
+        throw createError(
+          "SUPER_ADMIN cannot be created as a custom role",
+          403,
+        );
+      }
+
+      if (typeof displayName !== "string" || !displayName.trim()) {
+        throw createError("Role displayName is required", 400);
+      }
+
+      if (actor.roleRef.name === "MANAGER" && normalizedName === "MANAGER") {
+        throw createError("Managers cannot create another MANAGER role", 403);
+      }
+
+      const existingRole = await Role.findOne({
+        name: normalizedName,
+      }).session(session);
+
+      if (existingRole) {
+        throw createError("A role with this name already exists", 409);
+      }
+
+      const permissions = await getActivePermissions(permissionIds, session);
+
+      await enforceDelegationPolicy(actor, permissions, session);
+
+      const [role] = await Role.create(
+        [
+          {
+            name: normalizedName,
+            displayName: displayName.trim(),
+            description:
+              typeof description === "string" ? description.trim() : "",
+            permissions: permissions.map((permission) => permission._id),
+            isSystemRole: false,
+            isActive: true,
+            createdBy: actor._id,
+          },
+        ],
+        { session },
+      );
+
+      await recordAuditEvent({
+        actor: actor._id,
+        actorRole: actor.roleRef.name,
+        action: "roles.created",
+        resourceType: "Role",
+        resourceId: role._id,
+        outcome: "SUCCESS",
+        requestId,
+        details: {
+          roleName: role.name,
+          displayName: role.displayName,
+          permissionKeys: permissions.map((permission) => permission.key),
+        },
+        session,
+      });
+
+      return role;
     });
   } catch (error) {
     if (error.code === 11000) {
@@ -343,11 +383,12 @@ const getRoleById = async ({ actorId, roleId }) => {
   return role;
 };
 
-const updateRoleStatus = async ({ actorId, roleId, isActive }) => {
-  const actor = await getActiveActor(actorId);
-
-  requirePermission(actor, "roles:update");
-
+const updateRoleStatus = async ({
+  actorId,
+  roleId,
+  isActive,
+  requestId = null,
+}) => {
   if (!mongoose.isValidObjectId(roleId)) {
     throw createError("Invalid role ID", 400);
   }
@@ -356,37 +397,65 @@ const updateRoleStatus = async ({ actorId, roleId, isActive }) => {
     throw createError("isActive must be a boolean", 400);
   }
 
-  const role = await Role.findById(roleId);
+  return mongoose.connection.transaction(async (session) => {
+    const actor = await getActiveActor(actorId, session);
 
-  if (!role) {
-    throw createError("Role not found", 404);
-  }
+    requirePermission(actor, "roles:update");
 
-  // Protect built-in roles from accidental lockout.
+    const role = await Role.findById(roleId).session(session);
 
-  if (!isActive && role.isDeactivationProtected) {
-    throw createError("This role is protected from deactivation", 403);
-  }
+    if (!role) {
+      throw createError("Role not found", 404);
+    }
 
-  // Avoid disabling a role while active users still depend on it.
-  if (!isActive) {
-    const assignedActiveUser = await User.exists({
-      roleRef: role._id,
-      status: "ACTIVE",
+    if (!isActive && role.isDeactivationProtected) {
+      throw createError("This role is protected from deactivation", 403);
+    }
+
+    if (!isActive) {
+      const assignedActiveUser = await User.exists({
+        roleRef: role._id,
+        status: "ACTIVE",
+      }).session(session);
+
+      if (assignedActiveUser) {
+        throw createError(
+          "Reassign active users before deactivating this role",
+          409,
+        );
+      }
+    }
+
+    const previousIsActive = role.isActive;
+
+    // Avoid creating duplicate audit events for a no-op.
+    if (previousIsActive === isActive) {
+      return role;
+    }
+
+    role.isActive = isActive;
+    role.updatedBy = actor._id;
+
+    await role.save({ session });
+
+    await recordAuditEvent({
+      actor: actor._id,
+      actorRole: actor.roleRef.name,
+      action: "roles.status_updated",
+      resourceType: "Role",
+      resourceId: role._id,
+      outcome: "SUCCESS",
+      requestId,
+      details: {
+        roleName: role.name,
+        previousIsActive,
+        newIsActive: isActive,
+      },
+      session,
     });
 
-    if (assignedActiveUser) {
-      throw createError(
-        "Reassign active users before deactivating this role",
-        409,
-      );
-    }
-  }
-
-  role.isActive = isActive;
-  await role.save();
-
-  return role;
+    return role;
+  });
 };
 
 export {

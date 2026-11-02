@@ -16,6 +16,7 @@ const createRoleController = async (req, res, next) => {
       displayName: req.body.displayName,
       description: req.body.description,
       permissionIds: req.body.permissionIds ?? [],
+      requestId: req.id ?? null,
     });
 
     return res.status(201).json({
@@ -75,6 +76,7 @@ const updateRoleStatusController = async (req, res, next) => {
       actorId: req.user.id || req.user._id,
       roleId: req.params.id,
       isActive: req.body.isActive,
+      requestId: req.id ?? null,
     });
 
     return res.status(200).json({

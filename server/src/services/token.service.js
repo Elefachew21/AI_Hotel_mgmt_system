@@ -13,12 +13,17 @@ const publicKeyPath = path.resolve(__dirname, "../../keys/public.pem");
 const privateKey = fs.readFileSync(privateKeyPath, "utf8");
 const publicKey = fs.readFileSync(publicKeyPath, "utf8");
 
-const generateAccessToken = (user) => {
+const generateAccessToken = (user, sessionId) => {
+  if (!user?._id || !sessionId) {
+    throw new Error("A valid user and session ID are required.");
+  }
+
   return jwt.sign(
     {
       sub: user._id.toString(),
       role: user.role,
       tokenVersion: user.tokenVersion ?? 0,
+      sessionId,
     },
     privateKey,
     {

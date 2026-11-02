@@ -2,6 +2,7 @@ import { verifyAccessToken } from "../services/token.service.js";
 import User from "../models/User.js";
 import Role from "../models/Role.js";
 import Permission from "../models/Permission.js";
+import RefreshToken from "../models/RefreshToken.js";
 export const authenticate = async (req, res, next) => {
   let payload;
   // 1. Verify the bearer token.
@@ -24,10 +25,10 @@ export const authenticate = async (req, res, next) => {
 
     payload = verifyAccessToken(parts[1]);
 
-    if (!payload?.sub) {
+    if (!payload?.sub || !payload?.sessionId) {
       return res.status(401).json({
         success: false,
-        message: "Invalid access token",
+        message: "Invalid access token or missing session information.",
       });
     }
   } catch {
@@ -70,6 +71,21 @@ export const authenticate = async (req, res, next) => {
       return res.status(403).json({
         success: false,
         message: "Your account is not active",
+      });
+    }
+    // Reject access tokens belonging to revoked or expired sessions.
+    const activeSession = await RefreshToken.exists({
+      user: user._id,
+      familyId: payload.sessionId,
+      tokenVersion: user.tokenVersion ?? 0,
+      revokedAt: null,
+      expiresAt: { $gt: new Date() },
+    });
+
+    if (!activeSession) {
+      return res.status(401).json({
+        success: false,
+        message: "Your login session is no longer valid. Please log in again.",
       });
     }
 

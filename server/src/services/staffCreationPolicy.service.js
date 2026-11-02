@@ -2,17 +2,22 @@ import mongoose from "mongoose";
 import User from "../models/User.js";
 import Role from "../models/Role.js";
 import StaffCreationPolicy from "../models/StaffCreationPolicy.js";
+import { recordAuditEvent } from "./auditLog.service.js";
 import { createError } from "../errors/appError.js";
 
-const verifySuperAdmin = async (actorId) => {
+const verifySuperAdmin = async (actorId, session) => {
   if (!mongoose.isValidObjectId(actorId)) {
     throw createError("Invalid actor ID", 400);
   }
 
-  const actor = await User.findById(actorId).select("status roleRef").populate({
+  let query = User.findById(actorId).select("status roleRef").populate({
     path: "roleRef",
     select: "name isActive",
   });
+
+  if (session) query = query.session(session);
+
+  const actor = await query;
 
   if (
     !actor ||
@@ -26,12 +31,15 @@ const verifySuperAdmin = async (actorId) => {
       403,
     );
   }
+
+  return actor;
 };
 
 const validateTargetRoles = async (
   actorRole,
   allowedTargetRoleIds,
   allowAllActiveRoles,
+  session,
 ) => {
   if (!Array.isArray(allowedTargetRoleIds)) {
     throw createError("allowedTargetRoleIds must be an array", 400);
@@ -58,14 +66,16 @@ const validateTargetRoles = async (
     throw createError("Duplicate target role IDs are not allowed", 400);
   }
 
-  if (ids.length === 0) {
-    return [];
-  }
+  if (ids.length === 0) return [];
 
-  const roles = await Role.find({
+  let query = Role.find({
     _id: { $in: ids },
     isActive: true,
   });
+
+  if (session) query = query.session(session);
+
+  const roles = await query;
 
   if (roles.length !== ids.length) {
     throw createError(
@@ -74,8 +84,6 @@ const validateTargetRoles = async (
     );
   }
 
-  // No policy may allow creation of a Super Admin.
-  // Only Super Admin may configure Manager as a target role.
   const forbiddenRole = roles.find(
     (role) =>
       role.name === "SUPER_ADMIN" ||
@@ -98,9 +106,8 @@ const saveStaffCreationPolicy = async ({
   allowedTargetRoleIds = [],
   allowAllActiveRoles = false,
   isActive,
+  requestId = null,
 }) => {
-  await verifySuperAdmin(actorId);
-
   if (!mongoose.isValidObjectId(actorRoleId)) {
     throw createError("Invalid creator role ID", 400);
   }
@@ -109,44 +116,109 @@ const saveStaffCreationPolicy = async ({
     throw createError("isActive must be a boolean", 400);
   }
 
-  const actorRole = await Role.findById(actorRoleId);
+  return mongoose.connection.transaction(async (session) => {
+    const actor = await verifySuperAdmin(actorId, session);
 
-  if (!actorRole || !actorRole.isActive) {
-    throw createError("Creator role does not exist or is inactive", 400);
-  }
+    let actorRoleQuery = Role.findById(actorRoleId);
+    actorRoleQuery = actorRoleQuery.session(session);
 
-  const targetRoleIds = await validateTargetRoles(
-    actorRole,
-    allowedTargetRoleIds,
-    allowAllActiveRoles,
-  );
+    const actorRole = await actorRoleQuery;
 
-  let policy = await StaffCreationPolicy.findOne({
-    actorRole: actorRole._id,
-  });
-
-  if (policy) {
-    policy.allowedTargetRoles = targetRoleIds;
-    policy.allowAllActiveRoles = allowAllActiveRoles;
-    policy.updatedBy = actorId;
-
-    if (isActive !== undefined) {
-      policy.isActive = isActive;
+    if (!actorRole || !actorRole.isActive) {
+      throw createError("Creator role does not exist or is inactive", 400);
     }
 
-    await policy.save();
-  } else {
-    policy = await StaffCreationPolicy.create({
-      actorRole: actorRole._id,
-      allowedTargetRoles: targetRoleIds,
+    const targetRoleIds = await validateTargetRoles(
+      actorRole,
+      allowedTargetRoleIds,
       allowAllActiveRoles,
-      isActive: isActive ?? true,
-      createdBy: actorId,
-      updatedBy: actorId,
-    });
-  }
+      session,
+    );
 
-  return policy;
+    const policy = await StaffCreationPolicy.findOne({
+      actorRole: actorRole._id,
+    }).session(session);
+
+    let savedPolicy;
+    let action;
+
+    if (policy) {
+      const previousState = {
+        allowedTargetRoles: policy.allowedTargetRoles.map(String),
+        allowAllActiveRoles: policy.allowAllActiveRoles,
+        isActive: policy.isActive,
+      };
+
+      policy.allowedTargetRoles = targetRoleIds;
+      policy.allowAllActiveRoles = allowAllActiveRoles;
+      policy.updatedBy = actor._id;
+
+      if (isActive !== undefined) {
+        policy.isActive = isActive;
+      }
+
+      savedPolicy = await policy.save({ session });
+      action = "staff_creation_policy.updated";
+
+      await recordAuditEvent({
+        actor: actor._id,
+        actorRole: actor.roleRef.name,
+        action,
+        resourceType: "StaffCreationPolicy",
+        resourceId: savedPolicy._id,
+        outcome: "SUCCESS",
+        requestId,
+        details: {
+          actorRoleId: String(actorRole._id),
+          actorRoleName: actorRole.name,
+          previousState,
+          newState: {
+            allowedTargetRoles: targetRoleIds.map(String),
+            allowAllActiveRoles,
+            isActive: savedPolicy.isActive,
+          },
+        },
+        session,
+      });
+    } else {
+      const [createdPolicy] = await StaffCreationPolicy.create(
+        [
+          {
+            actorRole: actorRole._id,
+            allowedTargetRoles: targetRoleIds,
+            allowAllActiveRoles,
+            isActive: isActive ?? true,
+            createdBy: actor._id,
+            updatedBy: actor._id,
+          },
+        ],
+        { session },
+      );
+
+      savedPolicy = createdPolicy;
+      action = "staff_creation_policy.created";
+
+      await recordAuditEvent({
+        actor: actor._id,
+        actorRole: actor.roleRef.name,
+        action,
+        resourceType: "StaffCreationPolicy",
+        resourceId: savedPolicy._id,
+        outcome: "SUCCESS",
+        requestId,
+        details: {
+          actorRoleId: String(actorRole._id),
+          actorRoleName: actorRole.name,
+          allowedTargetRoles: targetRoleIds.map(String),
+          allowAllActiveRoles,
+          isActive: savedPolicy.isActive,
+        },
+        session,
+      });
+    }
+
+    return savedPolicy;
+  });
 };
 
 const listStaffCreationPolicies = async (actorId) => {

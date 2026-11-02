@@ -24,6 +24,9 @@ import {
   verifyEmailLimiter,
   resendVerificationLimiter,
 } from "../middleware/authRateLimit.js";
+import { refresh, logout, logoutAll } from "../controllers/auth.controller.js";
+
+import { authenticate } from "../middleware/authenticate.js";
 const router = express.Router();
 router.post("/register", registerLimiter, validate(registerSchema), register);
 
@@ -52,4 +55,9 @@ router.post(
   validate(resendVerificationSchema),
   resendVerification,
 );
+router.post("/refresh", loginLimiter, refresh);
+
+router.post("/logout", logout);
+
+router.post("/logout-all", authenticate, logoutAll);
 export default router;
